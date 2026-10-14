@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+Thumbs.db
+__pycache__/
+*.log
+playwright-report/
+test-results/
+.env
+.env.*

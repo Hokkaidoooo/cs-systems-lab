@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#182522" />
+    <meta name="description" content="亲手调整 Cache、页表与 TCP Reno 的参数，从访问轨迹、地址拆解和窗口曲线理解系统原理。" />
+    <title>系统原理实验室 · Systems Lab</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='9' fill='%23182522'/%3E%3Cpath d='M11 12h18v5H16v6h13v5H11z' fill='%23d7ef91'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./src/styles.css" />
+    <script type="module" src="./src/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#experiments">跳到实验</a>
+    <header class="site-header shell">
+      <a class="brand" href="#cache" aria-label="系统原理实验室首页">
+        <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="9" /><path d="M11 12h18v5H16v6h13v5H11z" /></svg>
+        <span>系统原理实验室<span class="brand-en">SYSTEMS LAB</span></span>
+      </a>
+      <a class="text-link header-link" href="./docs/models.md">模型说明 <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main class="shell">
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <p class="eyebrow"><span class="signal-dot" aria-hidden="true"></span> 计算机基础 · 交互实验</p>
+          <h1 id="hero-title">系统原理，<br />亲手运行一次<span class="lime-dot">。</span></h1>
+          <p class="hero-description">让系统原理在参数与轨迹中变得可见。</p>
+        </div>
+        <div class="hero-guide">
+          <p class="mono small-caps">CHANGE → OBSERVE → UNDERSTAND</p>
+          <p>改一组参数，<br />观察系统怎样响应。</p>
+          <div class="guide-steps"><span>选择实验</span><span aria-hidden="true">/</span><span>调整参数</span><span aria-hidden="true">/</span><span>读懂轨迹</span></div>
+        </div>
+      </section>
+
+      <div class="experiment-tabs" role="tablist" aria-label="选择系统实验" id="experiments">
+        <button class="experiment-tab" id="tab-cache" role="tab" aria-selected="true" aria-controls="panel-cache" tabindex="0" data-tab="cache">
+          <span class="tab-number">01</span><span class="tab-copy"><strong>Cache 缓存</strong><span>看清命中与替换</span></span><span class="tab-arrow" aria-hidden="true">↗</span>
+        </button>
+        <button class="experiment-tab" id="tab-paging" role="tab" aria-selected="false" aria-controls="panel-paging" tabindex="-1" data-tab="paging">
+          <span class="tab-number">02</span><span class="tab-copy"><strong>多级页表</strong><span>沿着地址逐级寻址</span></span><span class="tab-arrow" aria-hidden="true">↗</span>
+        </button>
+        <button class="experiment-tab" id="tab-reno" role="tab" aria-selected="false" aria-controls="panel-reno" tabindex="-1" data-tab="reno">
+          <span class="tab-number">03</span><span class="tab-copy"><strong>TCP Reno</strong><span>观察窗口如何变化</span></span><span class="tab-arrow" aria-hidden="true">↗</span>
+        </button>
+      </div>
+
+      <section class="experiment-panel" id="panel-cache" role="tabpanel" aria-labelledby="tab-cache" tabindex="0">
+        <div class="section-heading"><div><p class="eyebrow">MEMORY / CACHE</p><h2>一次访问，命中还是替换？</h2></div><span class="section-index mono" aria-hidden="true">01 / 03</span></div>
+        <div class="experiment-layout">
+          <aside class="control-panel" aria-labelledby="cache-controls-title">
+            <div class="card-heading"><h3 id="cache-controls-title">实验参数</h3><span class="label-tag">字节寻址</span></div>
+            <form id="cache-form" novalidate>
+              <div class="field-grid">
+                <div class="field"><label for="cache-size">缓存容量 <span>B</span></label><input id="cache-size" name="cacheSize" type="number" min="1" step="1" value="256" required aria-describedby="cache-geometry-hint cache-error" /></div>
+                <div class="field"><label for="cache-block">块大小 <span>B</span></label><input id="cache-block" name="blockSize" type="number" min="1" step="1" value="16" required aria-describedby="cache-geometry-hint cache-error" /></div>
+                <div class="field"><label for="cache-ways">相联度 <span>路</span></label><input id="cache-ways" name="ways" type="number" min="1" step="1" value="1" required aria-describedby="cache-geometry-hint cache-error" /></div>
+                <div class="field"><label for="cache-policy">替换策略</label><select id="cache-policy" name="policy" aria-describedby="cache-policy-hint cache-error"><option value="LRU">LRU</option><option value="FIFO">FIFO</option></select></div>
+              </div>
+              <p class="field-hint" id="cache-geometry-hint">容量、块大小与相联度均为 2 的幂；1 路即直接映射。</p>
+              <p class="sr-only" id="cache-policy-hint">LRU 按最近使用顺序替换，FIFO 按进入顺序替换。</p>
+              <div class="field"><label for="cache-addresses">内存访问序列</label><textarea id="cache-addresses" name="addresses" rows="3" spellcheck="false" required aria-describedby="cache-address-hint cache-error">0,64,128,192,0,64,128,192</textarea><p class="field-hint" id="cache-address-hint">用逗号或空格分隔；支持十进制与 0x 十六进制地址。</p></div>
+              <button class="run-button" type="submit"><span>运行缓存实验</span><span aria-hidden="true">→</span></button>
+              <p class="form-error" id="cache-error" role="alert" tabindex="-1" hidden></p>
+            </form>
+            <div class="presets"><p class="preset-label">用同一序列比较</p><div class="preset-buttons"><button type="button" data-cache-preset="direct">直接映射冲突</button><button type="button" data-cache-preset="associative">4 路组相联</button></div></div>
+            <div class="model-note"><span class="note-symbol" aria-hidden="true">i</span><div><h4>先看模型边界</h4><p>缓存初始为空；每次仅访问地址所在块。LRU 支持 3C 未命中分类，FIFO 仅比较命中。</p><a class="text-link" href="./docs/models.md#cache">理解缓存模型 <span aria-hidden="true">↗</span></a></div></div>
+          </aside>
+
+          <div class="results-column" id="cache-results" hidden>
+            <div class="metrics-grid" aria-label="缓存实验汇总">
+              <div class="metric-card"><p>命中率</p><strong class="metric-value" id="cache-hit-rate"></strong><span id="cache-hit-detail"></span></div>
+              <div class="metric-card"><p>缓存组织</p><strong class="metric-value compact" id="cache-geometry"></strong><span id="cache-line-detail"></span></div>
+              <div class="metric-card"><p>未命中</p><strong class="metric-value" id="cache-misses"></strong><span id="cache-miss-detail"></span></div>
+            </div>
+            <section class="instrument-card" aria-labelledby="cache-state-title">
+              <div class="instrument-heading"><div><p class="eyebrow">LIVE STATE</p><h3 id="cache-state-title">缓存里的此刻</h3></div><span class="result-badge" id="cache-current-result"></span></div>
+              <div class="replay-controls"><button type="button" class="icon-button" id="cache-prev" aria-label="上一次缓存访问">←</button><label class="sr-only" for="cache-step">回放缓存访问</label><input id="cache-step" type="range" min="1" max="1" value="1" /><button type="button" class="icon-button" id="cache-next" aria-label="下一次缓存访问">→</button><output class="replay-count mono" id="cache-step-count" for="cache-step"></output></div>
+              <div class="cache-sets" id="cache-sets"></div>
+              <div class="cache-pager" id="cache-group-pager" hidden><button type="button" class="quiet-button" id="cache-groups-prev">← 前 16 组</button><span class="mono" id="cache-group-range"></span><button type="button" class="quiet-button" id="cache-groups-next">后 16 组 →</button></div>
+              <div class="cache-legend"><span><i class="legend-square current" aria-hidden="true"></i>本次映射的组</span><span id="cache-order-note"></span></div>
+              <dl class="step-facts"><div><dt>访问地址</dt><dd id="cache-current-address"></dd></div><div><dt>内存块</dt><dd id="cache-current-block"></dd></div><div><dt>映射组 / 标签</dt><dd id="cache-current-location"></dd></div><div><dt>被替换块</dt><dd id="cache-current-eviction"></dd></div></dl>
+            </section>
+            <section class="data-card classification-card" aria-labelledby="cache-classification-title"><div class="card-heading"><h3 id="cache-classification-title">未命中从哪里来？</h3><span class="label-tag" id="cache-classification-tag"></span></div><div id="cache-classification"></div></section>
+            <section class="data-card" aria-labelledby="cache-trace-title"><div class="card-heading"><h3 id="cache-trace-title">访问轨迹</h3><span class="card-hint">点轮次可回放</span></div><div class="table-scroll"><table><caption class="sr-only">各次缓存访问、映射及命中结果</caption><thead><tr><th scope="col">轮次</th><th scope="col">地址</th><th scope="col">内存块</th><th scope="col">组 / 标签</th><th scope="col">结果</th><th scope="col">替换块</th></tr></thead><tbody id="cache-trace"></tbody></table></div></section>
+          </div>
+        </div>
+      </section>
+
+      <section class="experiment-panel" id="panel-paging" role="tabpanel" aria-labelledby="tab-paging" tabindex="0" hidden>
+        <div class="section-heading"><div><p class="eyebrow">MEMORY / ADDRESS TRANSLATION</p><h2>一个地址，要经过几级页表？</h2></div><span class="section-index mono" aria-hidden="true">02 / 03</span></div>
+        <div class="experiment-layout">
+          <aside class="control-panel" aria-labelledby="paging-controls-title">
+            <div class="card-heading"><h3 id="paging-controls-title">实验参数</h3><span class="label-tag">x86-64</span></div>
+            <form id="paging-form" novalidate>
+              <div class="field"><label for="paging-bits">虚拟地址有效位数</label><select id="paging-bits" name="virtualBits" aria-describedby="paging-error"><option value="48">48 位 · 四级地址空间</option><option value="57">57 位 · 五级地址空间</option></select></div>
+              <div class="field"><label for="paging-size">映射页大小</label><select id="paging-size" name="pageSize" aria-describedby="paging-error"><option value="4096">4 KiB · 基础页</option><option value="2097152">2 MiB · 大页</option><option value="1073741824">1 GiB · 巨页</option></select></div>
+              <div class="field"><label for="paging-addresses">待映射的虚拟地址</label><textarea id="paging-addresses" name="addresses" rows="4" spellcheck="false" required aria-describedby="paging-address-hint paging-error">0x12345678</textarea><p class="field-hint" id="paging-address-hint">输入规范的 64 位地址，用逗号或空格分隔。支持十进制与 0x 十六进制。</p></div>
+              <button class="run-button" type="submit"><span>拆解地址与页表</span><span aria-hidden="true">→</span></button>
+              <p class="form-error" id="paging-error" role="alert" tabindex="-1" hidden></p>
+            </form>
+            <div class="presets"><p class="preset-label">观察映射的疏密</p><div class="preset-buttons"><button type="button" data-paging-preset="near">相邻的两个 4 KiB 页</button><button type="button" data-paging-preset="sparse">跨 512 GiB 的两个页</button></div></div>
+            <div class="model-note"><span class="note-symbol" aria-hidden="true">i</span><div><h4>先看模型边界</h4><p>页表页固定为 4 KiB；输入地址共同构成映射集合。假设页大小一致、TLB 未命中，不计数据缓存命中。</p><a class="text-link" href="./docs/models.md#paging">理解页表模型 <span aria-hidden="true">↗</span></a></div></div>
+          </aside>
+
+          <div class="results-column" id="paging-results" hidden>
+            <div class="metrics-grid" aria-label="页表实验汇总">
+              <div class="metric-card"><p>页表层级</p><strong class="metric-value" id="paging-levels"></strong><span id="paging-level-detail"></span></div>
+              <div class="metric-card"><p>页表占用</p><strong class="metric-value compact" id="paging-memory"></strong><span id="paging-table-detail"></span></div>
+              <div class="metric-card"><p>映射页数</p><strong class="metric-value" id="paging-mapped"></strong><span id="paging-mapped-detail"></span></div>
+            </div>
+            <section class="instrument-card paging-instrument" aria-labelledby="paging-address-title">
+              <div class="instrument-heading"><div><p class="eyebrow">ADDRESS ANATOMY</p><h3 id="paging-address-title">把地址按位拆开</h3></div><span class="label-tag dark-tag" id="paging-effective-bits"></span></div>
+              <div class="address-select"><label for="paging-walk-select">查看地址</label><select id="paging-walk-select"></select></div>
+              <div class="address-readout mono" id="paging-address-readout"></div>
+              <div class="bit-fields" id="paging-bit-fields" aria-label="虚拟地址的索引与偏移字段"></div>
+              <p class="instrument-note" id="paging-bit-note"></p>
+            </section>
+            <section class="data-card" aria-labelledby="paging-walk-title"><div class="card-heading"><h3 id="paging-walk-title">沿页表逐级查找</h3><span class="label-tag">TLB 未命中</span></div><div class="page-walk" id="paging-walk"></div><p class="access-equation" id="paging-accesses"></p></section>
+            <section class="data-card" aria-labelledby="paging-footprint-title"><div class="card-heading"><h3 id="paging-footprint-title">这组映射需要多少页表？</h3></div><p class="card-description">共享上级页表的地址，只计一次页表页。</p><div class="table-scroll"><table><caption class="sr-only">各级页表页数与内存占用</caption><thead><tr><th scope="col">层级</th><th scope="col">页表页数</th><th scope="col">占用</th><th scope="col" class="bar-column">页数比较</th></tr></thead><tbody id="paging-tables"></tbody></table></div></section>
+          </div>
+        </div>
+      </section>
+
+      <section class="experiment-panel" id="panel-reno" role="tabpanel" aria-labelledby="tab-reno" tabindex="0" hidden>
+        <div class="section-heading"><div><p class="eyebrow">NETWORK / CONGESTION CONTROL</p><h2>丢包之后，发送窗口如何恢复？</h2></div><span class="section-index mono" aria-hidden="true">03 / 03</span></div>
+        <div class="experiment-layout">
+          <aside class="control-panel" aria-labelledby="reno-controls-title">
+            <div class="card-heading"><h3 id="reno-controls-title">实验参数</h3><span class="label-tag">RTT 轮次</span></div>
+            <form id="reno-form" novalidate>
+              <div class="field-grid"><div class="field"><label for="reno-window">初始窗口 <span>MSS</span></label><input id="reno-window" name="initialWindow" type="number" min="1" step="1" value="1" required aria-describedby="reno-error" /></div><div class="field"><label for="reno-threshold">初始门限 <span>MSS</span></label><input id="reno-threshold" name="initialThreshold" type="number" min="1" step="1" value="16" required aria-describedby="reno-error" /></div></div>
+              <div class="field"><label for="reno-rounds">观察轮数</label><input id="reno-rounds" name="roundCount" type="number" min="1" step="1" value="24" required aria-describedby="reno-error" /></div>
+              <div class="field"><label for="reno-duplicate">三次重复 ACK 的轮次</label><input id="reno-duplicate" name="duplicates" type="text" value="10" inputmode="text" autocomplete="off" aria-describedby="reno-event-hint reno-error" /></div>
+              <div class="field"><label for="reno-timeouts">超时的轮次</label><input id="reno-timeouts" name="timeouts" type="text" value="20" inputmode="text" autocomplete="off" aria-describedby="reno-event-hint reno-error" /><p class="field-hint" id="reno-event-hint">可留空；多个轮次用逗号分隔。同一轮只能发生一种事件。</p></div>
+              <button class="run-button" type="submit"><span>观察拥塞窗口</span><span aria-hidden="true">→</span></button>
+              <p class="form-error" id="reno-error" role="alert" tabindex="-1" hidden></p>
+            </form>
+            <div class="presets"><p class="preset-label">从这两种情形开始</p><div class="preset-buttons"><button type="button" data-reno-preset="growth">无丢包增长</button><button type="button" data-reno-preset="loss">两种丢包对照</button></div></div>
+            <div class="model-note"><span class="note-symbol" aria-hidden="true">i</span><div><h4>先看模型边界</h4><p>按 RTT 轮次观察 Reno。三次重复 ACK 展示快速恢复完成后的窗口；不模拟逐 ACK 或瞬态 +3，不预测真实吞吐。</p><a class="text-link" href="./docs/models.md#reno">理解 Reno 模型 <span aria-hidden="true">↗</span></a></div></div>
+          </aside>
+
+          <div class="results-column" id="reno-results" hidden>
+            <div class="metrics-grid" aria-label="Reno 实验汇总">
+              <div class="metric-card"><p>最终拥塞窗口</p><strong class="metric-value" id="reno-final-window"></strong><span>MSS</span></div>
+              <div class="metric-card"><p>最终慢启动门限</p><strong class="metric-value" id="reno-final-threshold"></strong><span>MSS</span></div>
+              <div class="metric-card"><p>拥塞事件</p><strong class="metric-value" id="reno-event-count"></strong><span id="reno-event-detail"></span></div>
+            </div>
+            <section class="instrument-card reno-instrument" aria-labelledby="reno-chart-title">
+              <div class="instrument-heading"><div><p class="eyebrow">CONGESTION WINDOW</p><h3 id="reno-chart-title">增长、退让，再出发</h3></div><span class="label-tag dark-tag">TCP RENO</span></div>
+              <div class="chart-legend"><span><i class="legend-line window" aria-hidden="true"></i>拥塞窗口 cwnd</span><span><i class="legend-line threshold" aria-hidden="true"></i>门限 ssthresh</span></div>
+              <div class="reno-chart" id="reno-chart"></div>
+              <div class="event-legend"><span><i class="legend-dot duplicate" aria-hidden="true"></i>三次重复 ACK</span><span><i class="legend-dot timeout" aria-hidden="true"></i>超时</span><span>曲线为每轮结束后的状态</span></div>
+              <div class="replay-controls"><button type="button" class="icon-button" id="reno-prev" aria-label="上一个 Reno 轮次">←</button><label class="sr-only" for="reno-step">观察 Reno 轮次</label><input id="reno-step" type="range" min="1" max="1" value="1" /><button type="button" class="icon-button" id="reno-next" aria-label="下一个 Reno 轮次">→</button><output class="replay-count mono" id="reno-step-count" for="reno-step"></output></div>
+              <dl class="step-facts reno-facts"><div><dt>拥塞窗口 / MSS</dt><dd id="reno-current-window"></dd></div><div><dt>慢启动门限 / MSS</dt><dd id="reno-current-threshold"></dd></div><div><dt>下一轮阶段</dt><dd id="reno-current-phase"></dd></div></dl>
+              <p class="instrument-note reno-step-note" id="reno-current-note"></p>
+            </section>
+            <section class="data-card" aria-labelledby="reno-trace-title"><div class="card-heading"><h3 id="reno-trace-title">逐轮轨迹</h3><span class="card-hint">窗口与门限单位：MSS</span></div><div class="table-scroll"><table><caption class="sr-only">TCP Reno 每轮的窗口、门限、事件与阶段</caption><thead><tr><th scope="col">轮次</th><th scope="col">窗口变化</th><th scope="col">轮后门限</th><th scope="col">事件</th><th scope="col">下一轮阶段</th></tr></thead><tbody id="reno-trace"></tbody></table></div></section>
+          </div>
+        </div>
+      </section>
+      <noscript><p class="form-error">实验需要启用 JavaScript 才能计算与显示结果。</p></noscript>
+      <p id="live-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+    </main>
+
+    <footer class="site-footer shell"><div class="footer-brand mono">SYS<span class="lime-dot">/</span>LAB <span>把原理放进实验里。</span></div><p>教学模型，适用边界见各实验。<a href="./docs/models.md">阅读模型说明 ↗</a></p></footer>
+  </body>
+</html>
