@@ -131,8 +131,9 @@ function runExperiment(name, calculate, render, announce = true) {
 function runCache(announce = true) {
   return runExperiment('cache', () => {
     const input = cacheInput();
-    const comparison = Object.fromEntries(['LRU', 'FIFO'].map((policy) => [policy, simulateCache({ ...input, policy })]));
-    return { data: comparison[input.policy], comparison };
+    const selected = simulateCache(input);
+    const other = simulateCache({ ...input, policy: input.policy === 'LRU' ? 'FIFO' : 'LRU' });
+    return { data: selected, comparison: { [input.policy]: selected, [other.config.policy]: other } };
   }, ({ data, comparison }) => {
     state.cacheComparison = comparison;
     renderCache(data);

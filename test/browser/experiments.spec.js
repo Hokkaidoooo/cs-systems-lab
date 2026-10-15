@@ -64,6 +64,11 @@ test('三类参数刷新恢复，非法版本和模型参数显式失败', async
   await expect(page.locator('#share-error')).toBeFocused();
   await expect(page.locator('#cache-error')).toContainText('2 的整数次幂');
   await expect(page.locator('#cache-results')).toBeHidden();
+  snapshot.fields['cache-size'] = '64';
+  snapshot.fields['cache-policy'] = 'unknown';
+  url.searchParams.set('experiment', JSON.stringify(snapshot));
+  await page.goto(url.href);
+  await expect(page.locator('#cache-error')).toContainText('policy 只能是 LRU 或 FIFO');
   snapshot.version = 999;
   url.searchParams.set('experiment', JSON.stringify(snapshot));
   await page.goto(url.href);
