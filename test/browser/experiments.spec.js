@@ -19,6 +19,48 @@ test('真实预设、同步策略回放和 FIFO 分类', async ({ page }) => {
   await page.screenshot({ path: 'test-results/cache-comparison.png', fullPage: true });
 });
 
+test('逐步 3C 依据与轨迹、键盘回放同步，命中及 FIFO 不误分类', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('#cache-size').fill('4');
+  await page.locator('#cache-block').fill('1');
+  await page.locator('#cache-addresses').fill('0,4,0,4');
+  await page.getByRole('button', { name: '运行缓存实验' }).click();
+  const current = page.locator('#cache-current-explanation');
+  const conflict = '冲突未命中：此前访问过该块；同容量全相联 LRU 命中。';
+  await expect(current).toHaveText(conflict);
+  await expect(page.locator('#cache-trace tr').nth(2)).toContainText(conflict);
+  await expect(page.locator('#cache-trace tr').nth(3)).toContainText(conflict);
+  await expect(page.locator('#compare-LRU-explanation')).toHaveText(conflict);
+  await page.locator('#cache-trace tr').first().getByRole('button').click();
+  await expect(current).toHaveText('强制未命中：首次访问该块；同容量全相联 LRU 也未命中。');
+  await page.locator('#cache-step').focus();
+  await page.keyboard.press('End');
+  await expect(current).toHaveText(conflict);
+  await expect(page.locator('#cache-step')).toHaveAttribute('aria-valuetext', `第 4 次访问，地址 0x4。${conflict}`);
+  await expect(page.locator('#cache-trace tr').nth(3)).toHaveAttribute('aria-current', 'step');
+
+  await page.locator('#cache-size').fill('2');
+  await page.locator('#cache-ways').fill('2');
+  await page.locator('#cache-addresses').fill('0,1,2,0');
+  await page.getByRole('button', { name: '运行缓存实验' }).click();
+  const capacity = '容量未命中：此前访问过该块；同容量全相联 LRU 也未命中。';
+  await expect(current).toHaveText(capacity);
+  await expect(page.locator('#cache-trace tr').last()).toContainText(capacity);
+
+  await page.locator('#cache-ways').fill('1');
+  await page.locator('#cache-addresses').fill('0,1,3,0');
+  await page.getByRole('button', { name: '运行缓存实验' }).click();
+  await expect(current).toHaveText('命中：块 0 已在组 0 中。不计入 3C 未命中。');
+  await expect(page.locator('#cache-current-result')).toHaveText('HIT · 命中');
+  await page.selectOption('#cache-policy', 'FIFO');
+  await page.getByRole('button', { name: '运行缓存实验' }).click();
+  await expect(current).toHaveText('命中：块 0 已在组 0 中。FIFO 不适用此 3C 分类。');
+  await page.locator('#cache-trace tr').first().getByRole('button').click();
+  await expect(current).toHaveText('FIFO 未命中：首次访问该块；不适用基于 LRU 的 3C 分类。');
+  await expect(page.locator('#compare-FIFO-explanation')).toHaveText(await current.textContent());
+  await expect(page.locator('#cache-trace')).not.toContainText(/强制未命中|容量未命中|冲突未命中/);
+});
+
 test('分页、Reno 预设与键盘错误焦点', async ({ page }) => {
   await page.goto('/');
   await page.locator('#tab-cache').focus();

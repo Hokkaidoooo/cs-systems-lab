@@ -69,18 +69,21 @@ export function simulateCache(input) {
     const block = Math.floor(address / blockSize);
     const set = block % setCount;
     const tag = Math.floor(block / setCount);
+    const firstAccess = !seen.has(block);
     const result = accessSet(sets[set], block, ways, policy);
     hits += Number(result.hit);
 
+    let missType = null;
+    let shadowHit = null;
     if (classification) {
       // 影子 Cache 在每次访问时独立更新，不能只接收实际 Cache 的缺失。
-      const shadowResult = accessSet(shadow, block, blockCount, 'LRU');
+      shadowHit = accessSet(shadow, block, blockCount, 'LRU').hit;
       if (!result.hit) {
-        const kind = !seen.has(block) ? 'compulsory' : shadowResult.hit ? 'conflict' : 'capacity';
-        classification[kind] += 1;
+        missType = firstAccess ? 'compulsory' : shadowHit ? 'conflict' : 'capacity';
+        classification[missType] += 1;
       }
-      seen.add(block);
     }
+    seen.add(block);
 
     return {
       step: index + 1,
@@ -89,6 +92,9 @@ export function simulateCache(input) {
       set,
       tag,
       ...result,
+      firstAccess,
+      shadowHit,
+      missType,
       sets: sets.map((blocks) => [...blocks]),
     };
   });

@@ -37,6 +37,16 @@
 
 FIFO 返回 `classification: null`。FIFO 与全相联 LRU 的差异可能来自替换策略，即使 FIFO 本身已经全相联，也可能比 LRU 多一次缺失，因此不能把这种差异直接命名为“冲突缺失”。
 
+每步保留以下字段，供轨迹、回放和策略对照核对同一份判定：
+
+| 字段 | 含义 |
+| --- | --- |
+| `firstAccess` | 此前是否从未访问过该**块**，LRU/FIFO 均为布尔值；同块内不同字节不算首次访问 |
+| `shadowHit` | 本次访问在同容量全相联 LRU 影子中的命中结果，LRU 为布尔值；FIFO 不运行此参照模型，返回 `null` |
+| `missType` | LRU 实际缺失的 `compulsory`、`capacity` 或 `conflict`；实际命中及所有 FIFO 访问均为 `null` |
+
+`shadowHit` 表示影子处理本次访问时是否已经持有该块，`sets` 则是实际 Cache 完成本次访问后的快照。实际命中也可能对应影子缺失：2 块直接映射访问 `0,1,3,0`，最后的块 0 仍在实际 Cache 的组 0 中，但已被全相联 LRU 影子淘汰。此时 `hit: true`、`shadowHit: false`、`missType: null`，不增加任何 3C 计数。所有非空 `missType` 按类型计数，恰好等于汇总 `classification`。
+
 可复核的小例子：
 
 | 配置与块序列 | 结果 |

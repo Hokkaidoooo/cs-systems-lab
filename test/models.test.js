@@ -21,6 +21,9 @@ test('Cache：同一块的不同字节共享一次装入', () => {
   ]);
   assert.deepEqual(result.stats, { accesses: 5, hits: 2, misses: 3, hitRate: 0.4 });
   assert.deepEqual(result.classification, { compulsory: 3, capacity: 0, conflict: 0 });
+  assert.deepEqual(result.steps.map(({ missType }) => missType), ['compulsory', null, 'compulsory', 'compulsory', null]);
+  assert.deepEqual(result.steps.map(({ firstAccess }) => firstAccess), [true, false, true, true, false]);
+  assert.deepEqual(result.steps.map(({ shadowHit }) => shadowHit), [false, true, false, false, true]);
 });
 
 test('Cache：4 块全相联 FIFO 的策略缺失不被标为冲突缺失', () => {
@@ -35,6 +38,8 @@ test('Cache：4 块全相联 FIFO 的策略缺失不被标为冲突缺失', () =
   assert.deepEqual(lru.classification, { compulsory: 5, capacity: 0, conflict: 0 });
   assert.deepEqual(fifo.steps[4].sets, [[0, 1, 2, 3]]);
   assert.deepEqual(lru.steps[4].sets, [[1, 2, 3, 0]]);
+  assert.ok(fifo.steps.every(({ missType, shadowHit }) => missType === null && shadowHit === null));
+  assert.deepEqual(fifo.steps.map(({ firstAccess }) => firstAccess), [true, true, true, true, false, true, false]);
 });
 
 test('Cache：直接映射的同组地址循环产生冲突缺失', () => {
@@ -42,6 +47,9 @@ test('Cache：直接映射的同组地址循环产生冲突缺失', () => {
   assert.deepEqual(result.classification, { compulsory: 2, capacity: 0, conflict: 2 });
   assert.equal(result.stats.misses, 4);
   assert.deepEqual(result.steps.map(({ set, tag }) => [set, tag]), [[0, 0], [0, 1], [0, 0], [0, 1]]);
+  assert.deepEqual(result.steps.map(({ missType }) => missType), ['compulsory', 'compulsory', 'conflict', 'conflict']);
+  assert.deepEqual(result.steps.map(({ firstAccess }) => firstAccess), [true, true, false, false]);
+  assert.deepEqual(result.steps.map(({ shadowHit }) => shadowHit), [false, false, true, true]);
 });
 
 test('Cache：工作集超出总容量时产生容量缺失', () => {
@@ -50,6 +58,9 @@ test('Cache：工作集超出总容量时产生容量缺失', () => {
   }));
   assert.deepEqual(result.classification, { compulsory: 3, capacity: 1, conflict: 0 });
   assert.equal(result.stats.misses, 4);
+  assert.deepEqual(result.steps.map(({ missType }) => missType), ['compulsory', 'compulsory', 'compulsory', 'capacity']);
+  assert.deepEqual(result.steps.map(({ firstAccess }) => firstAccess), [true, true, true, false]);
+  assert.deepEqual(result.steps.map(({ shadowHit }) => shadowHit), [false, false, false, false]);
 });
 
 test('Cache：实际命中也必须更新全相联 LRU 影子', () => {
@@ -58,6 +69,19 @@ test('Cache：实际命中也必须更新全相联 LRU 影子', () => {
   }));
   assert.equal(result.stats.hits, 1);
   assert.deepEqual(result.classification, { compulsory: 3, capacity: 0, conflict: 1 });
+  assert.deepEqual(result.steps.map(({ shadowHit }) => shadowHit), [false, false, true, false, true]);
+  assert.equal(result.steps[4].missType, 'conflict');
+});
+
+test('Cache：实际命中即使影子缺失也不属于 3C 缺失', () => {
+  const result = simulateCache(cacheInput({
+    cacheSize: 2, blockSize: 1, addresses: [0, 1, 3, 0],
+  }));
+  assert.equal(result.steps[3].hit, true);
+  assert.equal(result.steps[3].firstAccess, false);
+  assert.equal(result.steps[3].shadowHit, false);
+  assert.equal(result.steps[3].missType, null);
+  assert.deepEqual(result.classification, { compulsory: 3, capacity: 0, conflict: 0 });
 });
 
 test('Cache：地址计算不截断到 32 位', () => {

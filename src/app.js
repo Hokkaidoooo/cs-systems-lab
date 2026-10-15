@@ -5,6 +5,7 @@ import { FIELDS, serializeSnapshot, deserializeSnapshot } from './share.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const GROUPS_PER_PAGE = 16;
+const CACHE_MISS_LABELS = { compulsory: '强制未命中', capacity: '容量未命中', conflict: '冲突未命中' };
 const state = { cache: null, cacheComparison: null, cacheIndex: 0, cacheGroupPage: 0, paging: null, reno: null, renoIndex: 0 };
 const mobileChart = window.matchMedia('(max-width: 640px)');
 const byId = (id) => document.getElementById(id);
@@ -156,7 +157,20 @@ function renderComparisonStep(index) {
     setText(`compare-${policy}-result`, `第 ${step.step} 次 · ${step.hit ? '命中' : '未命中'} · ${step.evictedBlock === null ? '无替换' : `替换块 ${step.evictedBlock}`}`);
     const blocks = step.sets[step.set];
     setText(`compare-${policy}-blocks`, `组 ${step.set}：${blocks.map((block) => `#${block}`).join(' → ')}`);
+    setText(`compare-${policy}-explanation`, cacheStepExplanation(step));
   }
+}
+
+function cacheStepExplanation(step) {
+  if (step.hit) {
+    return `命中：块 ${step.block} 已在组 ${step.set} 中。`
+      + (step.shadowHit === null ? 'FIFO 不适用此 3C 分类。' : '不计入 3C 未命中。');
+  }
+  const visit = step.firstAccess ? '首次访问该块' : '此前访问过该块';
+  if (step.shadowHit === null) return `FIFO 未命中：${visit}；不适用基于 LRU 的 3C 分类。`;
+  const label = CACHE_MISS_LABELS[step.missType];
+  if (!label) throw new Error('模型返回了未知的 Cache 未命中类型。');
+  return `${label}：${visit}；同容量全相联 LRU ${step.shadowHit ? '命中' : '也未命中'}。`;
 }
 
 function runPaging(announce = true) {
@@ -228,7 +242,7 @@ function renderClassification(classification) {
     container.append(element('p', 'explanation', 'FIFO 的替换顺序不满足这里使用的 LRU 3C 分类条件，因此只比较命中与未命中，不显示 3C 数量。'));
     return;
   }
-  const categories = [['compulsory', '强制未命中'], ['capacity', '容量未命中'], ['conflict', '冲突未命中']];
+  const categories = Object.entries(CACHE_MISS_LABELS);
   const total = categories.reduce((sum, [key]) => sum + classification[key], 0);
   const bar = element('div', 'classification-bar');
   bar.setAttribute('aria-hidden', 'true');
@@ -252,10 +266,13 @@ function renderCacheTrace(steps) {
   const rows = steps.map((step, index) => {
     const row = element('tr');
     const badge = element('span', `table-badge ${step.hit ? 'hit' : 'miss'}`, step.hit ? '命中' : '未命中');
+    const explanation = tableCell(cacheStepExplanation(step));
+    explanation.className = 'cache-trace-explanation';
     row.append(
       tableCell(traceButton(step.step, () => selectCacheStep(index))), tableCell(hex(step.address)),
       tableCell(step.block), tableCell(`${step.set} / ${step.tag}`), tableCell(badge),
       tableCell(step.evictedBlock === null ? '—' : step.evictedBlock),
+      explanation,
     );
     return row;
   });
@@ -266,7 +283,8 @@ function selectCacheStep(index, announce = true) {
   state.cacheIndex = index;
   const step = state.cache.steps[index];
   state.cacheGroupPage = Math.floor(step.set / GROUPS_PER_PAGE);
-  const description = `第 ${step.step} 次访问，地址 ${hex(step.address)}，${step.hit ? '命中' : '未命中'}`;
+  const explanation = cacheStepExplanation(step);
+  const description = `第 ${step.step} 次访问，地址 ${hex(step.address)}。${explanation}`;
   syncReplay('cache', index, state.cache.steps.length, description);
   setText('cache-current-result', step.hit ? 'HIT · 命中' : 'MISS · 未命中');
   byId('cache-current-result').className = `result-badge ${step.hit ? 'hit' : 'miss'}`;
@@ -274,6 +292,7 @@ function selectCacheStep(index, announce = true) {
   setText('cache-current-block', `#${step.block}`);
   setText('cache-current-location', `${step.set} / ${step.tag}`);
   setText('cache-current-eviction', step.evictedBlock === null ? '无替换' : `#${step.evictedBlock}`);
+  setText('cache-current-explanation', explanation);
   renderCacheSets();
   renderComparisonStep(index);
   markCurrentRow('cache-trace', index);

@@ -87,17 +87,18 @@
               <div class="cache-pager" id="cache-group-pager" hidden><button type="button" class="quiet-button" id="cache-groups-prev">← 前 16 组</button><span class="mono" id="cache-group-range"></span><button type="button" class="quiet-button" id="cache-groups-next">后 16 组 →</button></div>
               <div class="cache-legend"><span><i class="legend-square current" aria-hidden="true"></i>本次映射的组</span><span id="cache-order-note"></span></div>
               <dl class="step-facts"><div><dt>访问地址</dt><dd id="cache-current-address"></dd></div><div><dt>内存块</dt><dd id="cache-current-block"></dd></div><div><dt>映射组 / 标签</dt><dd id="cache-current-location"></dd></div><div><dt>被替换块</dt><dd id="cache-current-eviction"></dd></div></dl>
+              <p class="cache-step-explanation" id="cache-current-explanation"></p>
             </section>
             <section class="data-card" aria-labelledby="comparison-title">
               <div class="card-heading"><h3 id="comparison-title">同一序列，两种替换策略</h3><span class="label-tag">同步回放</span></div>
               <p class="card-description" id="cache-comparison-summary"></p>
               <div class="comparison-grid">
-                <div><h4>LRU</h4><p id="compare-LRU-result"></p><p class="mono" id="compare-LRU-blocks"></p><p class="field-hint">最久未用 → 最近使用</p></div>
-                <div><h4>FIFO</h4><p id="compare-FIFO-result"></p><p class="mono" id="compare-FIFO-blocks"></p><p class="field-hint">最早进入 → 最近进入</p></div>
+                <div><h4>LRU</h4><p id="compare-LRU-result"></p><p class="mono" id="compare-LRU-blocks"></p><p class="field-hint">最久未用 → 最近使用</p><p class="explanation" id="compare-LRU-explanation"></p></div>
+                <div><h4>FIFO</h4><p id="compare-FIFO-result"></p><p class="mono" id="compare-FIFO-blocks"></p><p class="field-hint">最早进入 → 最近进入</p><p class="explanation" id="compare-FIFO-explanation"></p></div>
               </div>
             </section>
             <section class="data-card classification-card" aria-labelledby="cache-classification-title"><div class="card-heading"><h3 id="cache-classification-title">未命中从哪里来？</h3><span class="label-tag" id="cache-classification-tag"></span></div><div id="cache-classification"></div></section>
-            <section class="data-card" aria-labelledby="cache-trace-title"><div class="card-heading"><h3 id="cache-trace-title">访问轨迹</h3><span class="card-hint">点轮次可回放</span></div><div class="table-scroll"><table><caption class="sr-only">各次缓存访问、映射及命中结果</caption><thead><tr><th scope="col">轮次</th><th scope="col">地址</th><th scope="col">内存块</th><th scope="col">组 / 标签</th><th scope="col">结果</th><th scope="col">替换块</th></tr></thead><tbody id="cache-trace"></tbody></table></div></section>
+            <section class="data-card" aria-labelledby="cache-trace-title"><div class="card-heading"><h3 id="cache-trace-title">访问轨迹</h3><span class="card-hint">点轮次可回放</span></div><div class="table-scroll"><table><caption class="sr-only">各次缓存访问、映射、命中结果及分类依据</caption><thead><tr><th scope="col">轮次</th><th scope="col">地址</th><th scope="col">内存块</th><th scope="col">组 / 标签</th><th scope="col">结果</th><th scope="col">替换块</th><th scope="col">分类依据</th></tr></thead><tbody id="cache-trace"></tbody></table></div></section>
           </div>
         </div>
       </section>

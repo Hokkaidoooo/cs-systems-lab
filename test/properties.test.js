@@ -48,7 +48,26 @@ for (const seed of SEEDS) {
         if (value.policy === 'LRU') {
           assert.equal(Object.values(result.classification).reduce((a, b) => a + b, 0), result.stats.misses);
           assert.equal(result.classification.compulsory, new Set(value.addresses.map((a) => Math.floor(a / value.blockSize))).size);
+          const stepCounts = { compulsory: 0, capacity: 0, conflict: 0 };
+          for (const step of result.steps) {
+            assert.equal(typeof step.shadowHit, 'boolean');
+            if (step.hit) assert.equal(step.missType, null);
+            else {
+              assert.ok(Object.hasOwn(stepCounts, step.missType));
+              stepCounts[step.missType] += 1;
+            }
+          }
+          assert.deepEqual(stepCounts, result.classification, '逐步分类必须与汇总相同');
         } else assert.equal(result.classification, null);
+        const seen = new Set();
+        for (const step of result.steps) {
+          assert.equal(step.firstAccess, !seen.has(step.block));
+          seen.add(step.block);
+          if (value.policy === 'FIFO') {
+            assert.equal(step.missType, null);
+            assert.equal(step.shadowHit, null);
+          }
+        }
         for (const step of result.steps) for (const set of step.sets) {
           assert.ok(set.length <= value.ways);
           assert.equal(new Set(set).size, set.length);

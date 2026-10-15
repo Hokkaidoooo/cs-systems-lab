@@ -134,6 +134,7 @@ input[type="range"] { display: block; flex: 1; width: 100%; min-width: 0; height
 .step-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 20px 0 0; padding: 16px 0 0; border-top: 1px solid #3c4934; }
 .step-facts dt { color: #9caa92; font-size: 9px; margin-bottom: 5px; }
 .step-facts dd { margin: 0; color: #edf1e7; font: 12px/1.6 var(--mono); overflow-wrap: anywhere; }
+.cache-step-explanation { margin: 15px 0 0; color: #dee8d2; font-size: 12px; line-height: 1.8; }
 .data-card { padding: 21px 22px; min-width: 0; }
 .data-card .card-heading { margin-bottom: 14px; }
 .card-hint { color: #808c76; font-size: 10px; }
@@ -156,6 +157,7 @@ table { width: 100%; border-collapse: collapse; text-align: left; font-size: 11p
 th { font-size: 10px; line-height: 1.5; font-weight: 500; color: #7a8870; background: #f6f8f1; position: sticky; top: 0; z-index: 1; }
 th, td { padding: 10px 11px; border-bottom: 1px solid #e9eee1; white-space: nowrap; }
 td { font-family: var(--mono); color: #47563e; }
+.cache-trace-explanation { min-width: 18em; max-width: 26em; white-space: normal; font-family: var(--sans); line-height: 1.7; }
 th:first-child, td:first-child { padding-left: 10px; }
 tbody tr:last-child td { border-bottom: 0; }
 tbody tr.is-current td { background: #edf4dd; }
