@@ -46,6 +46,12 @@
         </button>
       </div>
 
+      <div class="share-controls">
+        <button type="button" class="quiet-button" id="share-button">生成完整实验链接</button>
+        <div id="share-output" hidden><label for="share-url">复制此链接可恢复三个实验的参数</label><input id="share-url" type="url" readonly /></div>
+        <p class="form-error" id="share-error" role="alert" tabindex="-1" hidden></p>
+      </div>
+
       <section class="experiment-panel" id="panel-cache" role="tabpanel" aria-labelledby="tab-cache" tabindex="0">
         <div class="section-heading"><div><p class="eyebrow">MEMORY / CACHE</p><h2>一次访问，命中还是替换？</h2></div><span class="section-index mono" aria-hidden="true">01 / 03</span></div>
         <div class="experiment-layout">
@@ -64,7 +70,7 @@
               <button class="run-button" type="submit"><span>运行缓存实验</span><span aria-hidden="true">→</span></button>
               <p class="form-error" id="cache-error" role="alert" tabindex="-1" hidden></p>
             </form>
-            <div class="presets"><p class="preset-label">用同一序列比较</p><div class="preset-buttons"><button type="button" data-cache-preset="direct">直接映射冲突</button><button type="button" data-cache-preset="associative">4 路组相联</button></div></div>
+            <div class="presets"><p class="preset-label">用同一序列比较</p><div class="preset-buttons"><button type="button" data-cache-preset="direct">直接映射冲突</button><button type="button" data-cache-preset="associative">4 路组相联</button><button type="button" id="cache-compare-preset">LRU / FIFO 替换分歧</button></div></div>
             <div class="model-note"><span class="note-symbol" aria-hidden="true">i</span><div><h4>先看模型边界</h4><p>缓存初始为空；每次仅访问地址所在块。LRU 支持 3C 未命中分类，FIFO 仅比较命中。</p><a class="text-link" href="https://github.com/Hokkaidoooo/cs-systems-lab/blob/main/docs/models.md#cache" target="_blank" rel="noopener noreferrer">理解缓存模型 <span aria-hidden="true">↗</span></a></div></div>
           </aside>
 
@@ -81,6 +87,14 @@
               <div class="cache-pager" id="cache-group-pager" hidden><button type="button" class="quiet-button" id="cache-groups-prev">← 前 16 组</button><span class="mono" id="cache-group-range"></span><button type="button" class="quiet-button" id="cache-groups-next">后 16 组 →</button></div>
               <div class="cache-legend"><span><i class="legend-square current" aria-hidden="true"></i>本次映射的组</span><span id="cache-order-note"></span></div>
               <dl class="step-facts"><div><dt>访问地址</dt><dd id="cache-current-address"></dd></div><div><dt>内存块</dt><dd id="cache-current-block"></dd></div><div><dt>映射组 / 标签</dt><dd id="cache-current-location"></dd></div><div><dt>被替换块</dt><dd id="cache-current-eviction"></dd></div></dl>
+            </section>
+            <section class="data-card" aria-labelledby="comparison-title">
+              <div class="card-heading"><h3 id="comparison-title">同一序列，两种替换策略</h3><span class="label-tag">同步回放</span></div>
+              <p class="card-description" id="cache-comparison-summary"></p>
+              <div class="comparison-grid">
+                <div><h4>LRU</h4><p id="compare-LRU-result"></p><p class="mono" id="compare-LRU-blocks"></p><p class="field-hint">最久未用 → 最近使用</p></div>
+                <div><h4>FIFO</h4><p id="compare-FIFO-result"></p><p class="mono" id="compare-FIFO-blocks"></p><p class="field-hint">最早进入 → 最近进入</p></div>
+              </div>
             </section>
             <section class="data-card classification-card" aria-labelledby="cache-classification-title"><div class="card-heading"><h3 id="cache-classification-title">未命中从哪里来？</h3><span class="label-tag" id="cache-classification-tag"></span></div><div id="cache-classification"></div></section>
             <section class="data-card" aria-labelledby="cache-trace-title"><div class="card-heading"><h3 id="cache-trace-title">访问轨迹</h3><span class="card-hint">点轮次可回放</span></div><div class="table-scroll"><table><caption class="sr-only">各次缓存访问、映射及命中结果</caption><thead><tr><th scope="col">轮次</th><th scope="col">地址</th><th scope="col">内存块</th><th scope="col">组 / 标签</th><th scope="col">结果</th><th scope="col">替换块</th></tr></thead><tbody id="cache-trace"></tbody></table></div></section>

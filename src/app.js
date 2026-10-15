@@ -1,10 +1,11 @@
 import { simulateCache } from './models/cache.js';
 import { analyzePaging } from './models/paging.js';
 import { simulateReno } from './models/reno.js';
+import { FIELDS, serializeSnapshot, deserializeSnapshot } from './share.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const GROUPS_PER_PAGE = 16;
-const state = { cache: null, cacheIndex: 0, cacheGroupPage: 0, paging: null, reno: null, renoIndex: 0 };
+const state = { cache: null, cacheComparison: null, cacheIndex: 0, cacheGroupPage: 0, paging: null, reno: null, renoIndex: 0 };
 const mobileChart = window.matchMedia('(max-width: 640px)');
 const byId = (id) => document.getElementById(id);
 const setText = (id, value) => { byId(id).textContent = String(value); };
@@ -128,7 +129,33 @@ function runExperiment(name, calculate, render, announce = true) {
 }
 
 function runCache(announce = true) {
-  return runExperiment('cache', () => simulateCache(cacheInput()), renderCache, announce);
+  return runExperiment('cache', () => {
+    const input = cacheInput();
+    const comparison = Object.fromEntries(['LRU', 'FIFO'].map((policy) => [policy, simulateCache({ ...input, policy })]));
+    return { data: comparison[input.policy], comparison };
+  }, ({ data, comparison }) => {
+    state.cacheComparison = comparison;
+    renderCache(data);
+    renderComparisonSummary();
+  }, announce);
+}
+
+function renderComparisonSummary() {
+  const { LRU, FIFO } = state.cacheComparison;
+  const firstOrder = LRU.steps.findIndex((step, index) => JSON.stringify(step.sets) !== JSON.stringify(FIFO.steps[index].sets));
+  const firstEviction = LRU.steps.findIndex((step, index) => step.evictedBlock !== FIFO.steps[index].evictedBlock);
+  setText('cache-comparison-summary', `LRU ${LRU.stats.hits}/${LRU.stats.accesses} 命中；FIFO ${FIFO.stats.hits}/${FIFO.stats.accesses} 命中。`
+    + (firstOrder < 0 ? '组内顺序没有分歧。' : `首次组内顺序分歧：第 ${firstOrder + 1} 次访问。`)
+    + (firstEviction < 0 ? '被替换块没有分歧。' : `首次替换分歧：第 ${firstEviction + 1} 次访问，LRU 替换块 ${LRU.steps[firstEviction].evictedBlock}，FIFO 替换块 ${FIFO.steps[firstEviction].evictedBlock}。`));
+}
+
+function renderComparisonStep(index) {
+  for (const policy of ['LRU', 'FIFO']) {
+    const step = state.cacheComparison[policy].steps[index];
+    setText(`compare-${policy}-result`, `第 ${step.step} 次 · ${step.hit ? '命中' : '未命中'} · ${step.evictedBlock === null ? '无替换' : `替换块 ${step.evictedBlock}`}`);
+    const blocks = step.sets[step.set];
+    setText(`compare-${policy}-blocks`, `组 ${step.set}：${blocks.map((block) => `#${block}`).join(' → ')}`);
+  }
 }
 
 function runPaging(announce = true) {
@@ -247,6 +274,7 @@ function selectCacheStep(index, announce = true) {
   setText('cache-current-location', `${step.set} / ${step.tag}`);
   setText('cache-current-eviction', step.evictedBlock === null ? '无替换' : `#${step.evictedBlock}`);
   renderCacheSets();
+  renderComparisonStep(index);
   markCurrentRow('cache-trace', index);
   if (announce) setText('live-status', description);
 }
@@ -510,6 +538,10 @@ function applyPreset(values, button, run) {
 }
 
 function wirePresets() {
+  byId('cache-compare-preset').addEventListener('click', (event) => applyPreset({
+    'cache-size': 64, 'cache-block': 16, 'cache-ways': 4,
+    'cache-policy': 'LRU', 'cache-addresses': '0,16,32,48,0,64,0',
+  }, event.currentTarget, runCache));
   document.querySelectorAll('[data-cache-preset]').forEach((button) => {
     button.addEventListener('click', () => applyPreset({
       'cache-size': 256, 'cache-block': 16, 'cache-ways': button.dataset.cachePreset === 'direct' ? 1 : 4,
@@ -560,6 +592,62 @@ function wireTabs() {
   if (['cache', 'paging', 'reno'].includes(initialTab)) activateTab(initialTab, false, false);
 }
 
+function shareError(error) {
+  const box = byId('share-error');
+  box.textContent = `分享链接未生效：${error.message}`;
+  box.hidden = false;
+  box.focus();
+  console.error('分享链接错误', error);
+}
+
+function wireShare() {
+  byId('share-button').addEventListener('click', () => {
+    byId('share-error').hidden = true;
+    byId('share-output').hidden = true;
+    const outcomes = [runCache(false), runPaging(false), runReno(false)];
+    if (outcomes.includes(false)) {
+      const name = ['cache', 'paging', 'reno'][outcomes.indexOf(false)];
+      activateTab(name);
+      byId(`${name}-error`).focus();
+      return;
+    }
+    const fields = Object.fromEntries(Object.values(FIELDS).flat().map((id) => [id, byId(id).value]));
+    const active = document.querySelector('[data-tab][aria-selected="true"]').dataset.tab;
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.searchParams.set('experiment', serializeSnapshot(active, fields));
+    url.hash = active;
+    byId('share-url').value = url.href;
+    byId('share-output').hidden = false;
+    byId('share-url').focus();
+    byId('share-url').select();
+    setText('live-status', '完整实验链接已生成，可复制保存。');
+  });
+}
+
+function restoreSharedExperiment() {
+  const params = new URL(window.location.href).searchParams;
+  if (!params.has('experiment')) return false;
+  try {
+    if (params.getAll('experiment').length !== 1) throw new TypeError('实验参数不能重复。');
+    const snapshot = deserializeSnapshot(params.get('experiment'));
+    for (const [id, value] of Object.entries(snapshot.fields)) byId(id).value = value;
+    const outcomes = [runCache(false), runPaging(false), runReno(false)];
+    if (outcomes.includes(false)) {
+      const name = ['cache', 'paging', 'reno'][outcomes.indexOf(false)];
+      activateTab(name);
+      byId(`${name}-error`).focus();
+      throw new TypeError('链接中的实验参数未通过模型校验，请检查对应错误。');
+    }
+    activateTab(snapshot.active);
+    setText('live-status', '已恢复链接中的全部实验参数和结果。');
+  } catch (error) {
+    for (const name of Object.keys(FIELDS)) byId(`${name}-results`).hidden = true;
+    shareError(error);
+  }
+  return true;
+}
+
 function initialize() {
   for (const [name, run] of [['cache', runCache], ['paging', runPaging], ['reno', runReno]]) {
     byId(`${name}-form`).addEventListener('submit', (event) => { event.preventDefault(); run(); });
@@ -569,6 +657,7 @@ function initialize() {
   }
   wireTabs();
   wirePresets();
+  wireShare();
   wireReplay('cache', () => state.cacheIndex, () => state.cache.steps.length, selectCacheStep);
   wireReplay('reno', () => state.renoIndex, () => state.reno.steps.length, selectRenoStep);
   byId('cache-groups-prev').addEventListener('click', () => { state.cacheGroupPage -= 1; renderCacheSets(); });
@@ -582,9 +671,11 @@ function initialize() {
     renderRenoChart(state.reno);
     selectRenoStep(state.renoIndex, false);
   });
-  runCache(false);
-  runPaging(false);
-  runReno(false);
+  if (!restoreSharedExperiment()) {
+    runCache(false);
+    runPaging(false);
+    runReno(false);
+  }
 }
 
 initialize();

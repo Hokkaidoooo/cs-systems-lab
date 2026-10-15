@@ -10,5 +10,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm ci
       - run: npm test
       - run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser

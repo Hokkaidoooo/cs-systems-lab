@@ -4,10 +4,16 @@
   "private": true,
   "type": "module",
   "description": "可交互、可核对的 Cache、x86-64 分页与 TCP Reno 教学实验",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "test": "node --test test/*.test.js",
+    "test:browser": "playwright test",
     "check": "node tools/check.mjs",
     "dev": "python -m http.server 4173 --bind 127.0.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1"
   }
 }
