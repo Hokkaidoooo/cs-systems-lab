@@ -2,6 +2,8 @@
 
 # 系统原理实验室
 
+**简体中文** · [English](README.en.md) · [Español](README.es.md) · [日本語](README.ja.md)
+
 通过改参数、看轨迹、核对数值，理解 Cache 映射、x86-64 地址翻译与 TCP Reno。
 
 **[在线体验](https://hokkaidoooo.github.io/cs-systems-lab/)** · [模型与边界](docs/models.md) · [测试用例](test/models.test.js)
